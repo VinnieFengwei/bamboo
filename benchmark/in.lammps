@@ -1,46 +1,36 @@
-units             real
-atom_style        full
-atom_modify       map yes
-newton off
-read_data in.data
+units           real
+atom_style      full
+boundary        p p p
+
+atom_modify     map yes
+read_data	    in.data
 
 pair_style      bamboo 5.0 5.0 10.0 1
-pair_coeff      benchmark.pt   H LI C O F P
+pair_coeff      benchmark.pt H C O
 
-kspace_style    pppm 1.0e-6
-kspace_modify   mesh 64 64 64
+neighbor        3.0 bin
+neigh_modify	delay 0 check yes
 
-neighbor	    3 bin
-neigh_modify    delay 0 every 1 check yes
-timestep        1
+timestep        0.5
+velocity        all create 298 123456 mom yes rot yes dist gaussian
+
+compute         ke all ke/atom
+variable        kB equal 0.0019872041       # Boltzmann const. (kcal/mol·K)
+variable        temp atom c_ke/(1.5*${kB})  # per-atom temperature (K)
+
+fix             1 all nve
+
+compute         layers all chunk/atom bin/1d z lower 0.05 units reduced
+fix             2 all ave/chunk 10 100 1000 layers v_temp file profile1.mp
+fix             3 all thermal/conductivity 500 z 20
+
+variable        tdiff equal f_2[11][3]-f_2[1][3]
+thermo_style    custom step temp epair etotal f_3 v_tdiff
+thermo_modify   colname f_3 E_delta colname v_tdiff dTemp_step
+
+fix             ave all ave/time 1 1 1000 v_tdiff ave running
+thermo_style    custom step temp epair etotal f_3 v_tdiff f_ave
+thermo_modify   colname f_3 E_delta colname v_tdiff dTemp_step colname f_ave dTemp
 
 thermo          1000
-thermo_style    custom step temp press vol density pe ke etotal evdwl ecoul spcpu 
-
-variable pxy equal pxy
-variable pxz equal pxz
-variable pyz equal pyz
-fix pressure all ave/time 1 1 1 v_pxy v_pxz v_pyz file dump_pressure.out
-
-dump 1 all custom 1000 dump_npt.lammpstrj id type xu yu zu x y z ix iy iz vx vy vz fx fy fz q
-
-velocity all create 300.0 4928459
-velocity all zero linear
-
-minimize 0.0 0.0 1000 100000
-
-# Fix NPT
-fix 1 all npt temp 300.0 300.0 100 iso 0 0 1000
-
-run 1000000
-write_data npt.data
-unfix 1
-undump 1
-
-dump 2 all custom 1000 dump_nvt.lammpstrj id type xu yu zu x y z ix iy iz vx vy vz fx fy fz q
-
-# Fix NVT
-fix 2 all nvt temp 300.0 300.0 10
-
-run 5000000
-write_data nvt.data
+run             4000000
